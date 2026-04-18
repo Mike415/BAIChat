@@ -48,14 +48,17 @@ for msg in messages:
     except:
         time_str = ""
 
-    content_escaped = html.escape(msg["content"])
-    # Linkify URLs
     import re
-    content_escaped = re.sub(
-        r'(https?://[^\s&lt;]+)',
-        r'<a href="\1" target="_blank" rel="noopener" style="color:#53BDEB;text-decoration:none;word-break:break-all">\1</a>',
-        content_escaped
-    )
+    raw = msg["content"]
+    # Linkify BEFORE html-escaping so URLs stay intact
+    parts = re.split(r'(https?://\S+)', raw)
+    content_escaped = ""
+    for part in parts:
+        if re.match(r'^https?://\S+$', part):
+            url_esc = html.escape(part)
+            content_escaped += f'<a href="{url_esc}" target="_blank" rel="noopener" style="color:#53BDEB;text-decoration:none;word-break:break-all">{url_esc}</a>'
+        else:
+            content_escaped += html.escape(part)
 
     direction = "out" if is_me else "in"
     sender_html = f'<div class="sender" style="color:{color}">{html.escape(msg["sender"])}</div>' if show_sender else ""
