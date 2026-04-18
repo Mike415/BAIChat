@@ -10,15 +10,12 @@ if [ ! -f "$SPACE_DB" ]; then
     exit 1
 fi
 
-# Export messages to JSON
-MESSAGES_JSON=$(sqlite3 -json "$SPACE_DB" "SELECT id, sender, content, timestamp FROM messages WHERE deleted = 0 ORDER BY id ASC")
-MSG_COUNT=$(sqlite3 "$SPACE_DB" "SELECT COUNT(*) FROM messages WHERE deleted = 0")
-
 cd "$REPO_DIR"
 
-# Generate static HTML
-python3 << PYEOF
-import json, html
+# Generate static HTML directly from DB (avoids shell JSON escaping issues)
+python3 << 'PYEOF'
+import sqlite3, html, re
+from datetime import datetime
 
 SENDER_COLORS = {
     "Steve Simon": "#53BDEB",
@@ -27,20 +24,19 @@ SENDER_COLORS = {
     "John Foster": "#CB99C9",
 }
 
-messages = json.loads('''$MESSAGES_JSON''')
-count = $MSG_COUNT
+db = sqlite3.connect("/home/hatch/workspace/spaces/bai-area-boys/app.db")
+rows = db.execute("SELECT id, sender, content, timestamp FROM messages WHERE deleted = 0 ORDER BY id ASC").fetchall()
+count = len(rows)
 
 bubbles = []
 prev_sender = None
-for msg in messages:
-    is_me = msg["sender"] == "Mike"
-    show_sender = not is_me and msg["sender"] != prev_sender
-    color = SENDER_COLORS.get(msg["sender"], "#53BDEB")
+for row in rows:
+    msg_id, sender, content, ts = row
+    is_me = sender == "Mike"
+    show_sender = not is_me and sender != prev_sender
+    color = SENDER_COLORS.get(sender, "#53BDEB")
 
-    # Format time
-    ts = msg["timestamp"]
     try:
-        from datetime import datetime
         dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
         hour = dt.hour % 12 or 12
         ampm = "am" if dt.hour < 12 else "pm"
@@ -48,10 +44,8 @@ for msg in messages:
     except:
         time_str = ""
 
-    import re
-    raw = msg["content"]
-    # Linkify BEFORE html-escaping so URLs stay intact
-    parts = re.split(r'(https?://\S+)', raw)
+    # Linkify BEFORE html-escaping
+    parts = re.split(r'(https?://\S+)', content)
     content_escaped = ""
     for part in parts:
         if re.match(r'^https?://\S+$', part):
@@ -61,13 +55,14 @@ for msg in messages:
             content_escaped += html.escape(part)
 
     direction = "out" if is_me else "in"
-    sender_html = f'<div class="sender" style="color:{color}">{html.escape(msg["sender"])}</div>' if show_sender else ""
+    sender_html = f'<div class="sender" style="color:{color}">{html.escape(sender)}</div>' if show_sender else ""
     status_html = '<span class="status">✓✓</span>' if is_me else ""
     margin = "6px 0 1px" if show_sender else "1px 0"
 
-    bubbles.append(f'''<div class="message {direction}" style="margin:{margin}"><div class="bubble">{sender_html}<div class="text">{content_escaped}</div><div class="meta"><span class="time">{time_str}</span>{status_html}</div><div style="clear:both"></div></div></div>''')
+    bubbles.append(f'<div class="message {direction}" style="margin:{margin}"><div class="bubble">{sender_html}<div class="text">{content_escaped}</div><div class="meta"><span class="time">{time_str}</span>{status_html}</div><div style="clear:both"></div></div></div>')
+    prev_sender = sender
 
-    prev_sender = msg["sender"]
+db.close()
 
 chat_html = "\n".join(bubbles)
 
@@ -92,7 +87,7 @@ git add -A
 if git diff --cached --quiet; then
     echo "No changes to push"
 else
-    git commit -m "Auto-sync v4.1: $(date -u +'%Y-%m-%d %H:%M') - $MSG_COUNT messages"
+    git commit -m "Auto-sync v4.1: $(date -u +'%Y-%m-%d %H:%M') - $(sqlite3 "$SPACE_DB" 'SELECT COUNT(*) FROM messages WHERE deleted=0') messages"
     git push origin main
     echo "Pushed to GitHub"
 fi
