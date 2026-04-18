@@ -1,8 +1,8 @@
-# BAI Area Boys
+# BAI Boys Chat
 
 Mock WhatsApp group chat export.
 
-View live: https://mike415.github.io/bai-area-boys/
+View live: https://mike415.github.io/BAIBoysChat/
 
 ## Updating
 
