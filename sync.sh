@@ -3,7 +3,7 @@
 set -e
 
 SPACE_DB="/home/hatch/workspace/spaces/bai-area-boys/app.db"
-REPO_DIR="/home/hatch/workspace/bai-area-boys-github"
+REPO_DIR="/home/hatch/workspace/BAIChat"
 
 if [ ! -f "$SPACE_DB" ]; then
     echo "ERROR: app.db not found"
